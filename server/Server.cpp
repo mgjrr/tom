@@ -5,9 +5,11 @@
 
 using namespace std;
 
+const string fileDes = "fileDes.txt";
 // 服务端类成员函数
 struct timeval timeout = {3, 0}; //3s
-int global_epFD;
+int global_epFD,global_listenFD;
+std::set<int > connections;
 void* handle(void * threadIn)
 {
     int clientFD = *(int*)threadIn;
@@ -17,6 +19,7 @@ void* handle(void * threadIn)
     {
         // printf("length = %d, %c \n",length,cmd_buf[0]);
         printf("Client command error,maybe client have quit.\n");
+        connections.erase(clientFD);
         close(clientFD);
         return NULL;
     }
@@ -37,6 +40,7 @@ void* handle(void * threadIn)
             break;
         }
     }
+    cout<<"Your cmd is "<<cmd_buf[0]<<endl;
     switch (cmd_buf[0])
     {
     case 'U':
@@ -46,7 +50,9 @@ void* handle(void * threadIn)
         sendFile(clientFD, fileName);
         break;
     case 'B':
-        describeFile();
+        describeFileOutput();
+        cout<<"fileDes = "<<fileDes<<endl;
+        sendFile(clientFD, fileDes);
         break;
     default:
         break;
@@ -66,7 +72,7 @@ void receiveFile(int clientFD, string fileName)
     char recv_buf[BUF_SIZE];
     cout << "fileName = " << fileName << endl;
 
-    string fullPath = "/root/server/";
+    string fullPath = "/root/depository/";
     fullPath += fileName;
     cout << "fullPath  = " << fullPath << endl;
     FILE *fd;
@@ -110,7 +116,7 @@ void sendFile(int clientFD, string fileName)
 
     cout << "fileName = " << fileName << endl;
 
-    string fullPath = "/root/server/";
+    string fullPath = "/root/depository/";
     fullPath += fileName;
     cout << "fullPath  = " << fullPath << endl;
     FILE *fd;
@@ -138,10 +144,31 @@ void sendFile(int clientFD, string fileName)
     return;
 }
 
-void describeFile()
+void describeFileOutput()
 {
-    // to do.
+    cout<<"at least here"<<endl;
+    system("ls -l > /root/depository/fileDes.txt");
     return;
+}
+
+void Server :: dealCommand(char cmd)
+{
+    if(cmd>='A'&&cmd<='Z') cmd = cmd-'A'+'a';
+    cout<<"Your command is "<<cmd<<endl;
+    if(cmd>='a'&&cmd<='z')
+    {
+        if(cmd=='b')
+            system("ls -l");
+        if(cmd=='q')
+        {
+            Close();
+            exit(0);
+        }
+    }
+    else
+    {
+        cout<<"Please input valid command"<<endl;
+    }
 }
 // 服务端类构造函数
 Server::Server()
@@ -167,6 +194,7 @@ void Server::Init()
 
     //创建监听socket
     listenFD = socket(PF_INET, SOCK_STREAM, 0);
+    global_listenFD = listenFD;
     if (listenFD < 0)
     {
         perror("listenFD");
@@ -182,9 +210,16 @@ void Server::Init()
 
     epFD = epoll_create(MAX_EVENT);
     global_epFD = epFD;
+    
+    //add listener.
     ev.data.fd = listenFD;
     ev.events = EPOLLIN | EPOLLET;
     epoll_ctl(epFD, EPOLL_CTL_ADD, listenFD, &ev);
+
+    //listen to stdin.
+    ev.data.fd = STDIN_FILENO;
+    ev.events = EPOLLIN ;
+    epoll_ctl(epFD, EPOLL_CTL_ADD, STDIN_FILENO, &ev);
 
     cout << "epoll create success" << endl;
 
@@ -207,6 +242,8 @@ void Server::Close()
 
     //关闭epoll监听
     close(epFD);
+    for(auto i: connections)
+        close(i);
     cout << "server end." << endl;
 }
 
@@ -240,13 +277,15 @@ void Server::Start()
                 epoll_ctl(epFD, EPOLL_CTL_ADD, connect_fd, &ev);
                 cout << "a new connection!  "<<endl;
             }
+            //from stdin.
+            else if(events[i].data.fd == STDIN_FILENO)
+            {
+                cout<<"Command received.\n";
+                char command_buf[BUF_SIZE];
+                read(STDIN_FILENO, command_buf, sizeof(command_buf));
+                dealCommand(command_buf[0]);
+            }
             //read from a existed connection
-            // else if(events[i].events & EPOLLHUP)
-            // {
-            //     cout<<"target have quit .close the socket.";
-            //     printf("对方IP %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
-            //     close(events[i].data.fd);
-            // }
             else
             {
                 

@@ -7,7 +7,7 @@ using namespace std;
 
 // 服务端类成员函数
 struct timeval timeout = {3, 0}; //3s
-int global_epFD;
+int global_epFD,global_listenFD;
 void* handle(void * threadIn)
 {
     int clientFD = *(int*)threadIn;
@@ -140,8 +140,28 @@ void sendFile(int clientFD, string fileName)
 
 void describeFile()
 {
-    // to do.
+
+    
     return;
+}
+
+void dealCommand(char cmd)
+{
+    if(cmd>='A'&&cmd<='Z') cmd = cmd-'A'+'a';
+    cout<<"Your command is "<<cmd<<endl;
+    if(cmd>='a'&&cmd<='z')
+    {
+        if(cmd=='b')
+            system("ls -l");
+        if(cmd=='q')
+        {
+            close(global_listenFD);
+        }
+    }
+    else
+    {
+        cout<<"Please input valid command"<<endl;
+    }
 }
 // 服务端类构造函数
 Server::Server()
@@ -167,6 +187,7 @@ void Server::Init()
 
     //创建监听socket
     listenFD = socket(PF_INET, SOCK_STREAM, 0);
+    global_listenFD = listenFD;
     if (listenFD < 0)
     {
         perror("listenFD");
@@ -182,9 +203,16 @@ void Server::Init()
 
     epFD = epoll_create(MAX_EVENT);
     global_epFD = epFD;
+    
+    //add listener.
     ev.data.fd = listenFD;
     ev.events = EPOLLIN | EPOLLET;
     epoll_ctl(epFD, EPOLL_CTL_ADD, listenFD, &ev);
+
+    //listen to stdin.
+    ev.data.fd = STDIN_FILENO;
+    ev.events = EPOLLIN ;
+    epoll_ctl(epFD, EPOLL_CTL_ADD, STDIN_FILENO, &ev);
 
     cout << "epoll create success" << endl;
 
@@ -236,17 +264,19 @@ void Server::Start()
 
                 connections.insert(connect_fd);
                 ev.data.fd = connect_fd;
-                ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLHUP;
+                ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
                 epoll_ctl(epFD, EPOLL_CTL_ADD, connect_fd, &ev);
-                cout << "a new connection!  ";
+                cout << "a new connection!  "<<endl;
+            }
+            //from stdin.
+            else if(events[i].data.fd == STDIN_FILENO)
+            {
+                cout<<"Command received.\n";
+                char command_buf[BUF_SIZE];
+                read(STDIN_FILENO, command_buf, sizeof(command_buf));
+                dealCommand(command_buf[0]);
             }
             //read from a existed connection
-            // else if(events[i].events & EPOLLHUP)
-            // {
-            //     cout<<"target have quit .close the socket.";
-            //     printf("对方IP %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
-            //     close(events[i].data.fd);
-            // }
             else
             {
                 

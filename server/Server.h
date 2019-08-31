@@ -8,6 +8,7 @@
  
 using namespace std;
  
+
 // 服务端类，用来处理客户端请求
 class Server {
  
@@ -23,10 +24,8 @@ public:
  
     // 启动服务端
     void Start();
-
-    
-private:
-    // 广播消息给所有客户端
+    void dealCommand(char cmd);
+        // 广播消息给所有客户端
     
     // 服务器端serverAddr信息
     struct sockaddr_in serverAddr;
@@ -38,9 +37,10 @@ private:
     int epFD;
     struct epoll_event ev,events[MAX_EVENT];
     // 客户端列表
-    std::set<int> connections;
+    // std::set<int> connections;
 };
 void receiveFile(int,string);
 void sendFile(int,string);
-void describeFile();
+void describeFileOutput();
 void * handle(void* );
+void dealCommand(char cmd);

@@ -203,4 +203,35 @@ void Client ::downloadFile(string fileName)
 }
 void Client ::browseFile()
 {
+    cout<<"Browse file on cloud."<<endl;
+    
+    int length;
+    string pres = "B";
+    if (send(sock, pres.c_str(), pres.length(), 0) < 0)
+    {
+        printf("Command [%s] send Failed.\n", "upload");
+        return;
+    }
+    if ((length = recv(sock, recv_buf, sizeof(recv_buf), 0)) != 1 || recv_buf[0] != 'Y')
+    {
+        printf("Server  send back on [%s] error.\n", "browse file");
+        return;
+    }
+
+    timeout = {3, 0};
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout));
+    bzero(recv_buf, sizeof(recv_buf));
+    while (length = recv(sock, recv_buf, BUF_SIZE, 0))
+    {
+        if (length == -1 && errno == EAGAIN)
+        {
+            printf("timeout.\n");
+            break;
+        }
+        recv_buf[length] = '\0';
+        printf("%s\n",recv_buf);
+        bzero(recv_buf, sizeof(recv_buf));
+        //cout << write_length << endl;
+    }
+    cout<<"File browse end."<<endl;
 }
