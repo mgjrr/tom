@@ -1,11 +1,11 @@
 CC = g++
 CFLAGS = -std=c++11
  
-all: ClientMain.cpp Client.o
-	$(CC) $(CFLAGS) ClientMain.cpp Client.o -o client
+all: T_client_main.cpp T_client.o
+	$(CC) $(CFLAGS) T_client_main.cpp T_client.o -o client_T
  
-Client.o: Client.cpp Client.h Common.h
-	$(CC) $(CFLAGS) -c Client.cpp
+T_client.o: T_client.cpp T_client.h facility.h
+	$(CC) $(CFLAGS) -c T_client.cpp
  
 clean:
-	rm -f *.o client
+	rm -f *.o client_T

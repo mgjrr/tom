@@ -1,11 +1,11 @@
 CC = g++
 CFLAGS = -std=c++11 -lpthread
  
-all:  ServerMain.cpp  Server.o
-	$(CC) $(CFLAGS) ServerMain.cpp  Server.o -o server
- 
-Server.o: Server.cpp Server.h Common.h
-	$(CC) $(CFLAGS) -c Server.cpp
- 
+all:  T_server_main.cpp  T_server.o
+	$(CC) $(CFLAGS) T_server_main.cpp  T_server.o -o server_T
+	
+T_server.o: T_server.cpp T_server.h facility.h
+	$(CC) $(CFLAGS) -c T_server.cpp
+
 clean:
-	rm -f *.o server
+	rm -f *.o server_T
