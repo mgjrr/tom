@@ -21,6 +21,7 @@ private:
     bool download_file(std::string);
     bool browse_file();
     bool validCheck(std::string);
+    bool farewell();
     bool back_del(std::string);
 };
 

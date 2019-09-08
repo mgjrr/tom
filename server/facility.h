@@ -11,6 +11,8 @@
 #include <fstream>
 #include <set>
 #include <thread>
+#include <vector>
+#include <mutex>
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <errno.h>

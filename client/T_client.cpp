@@ -1,20 +1,12 @@
 #include "T_client.h"
-
-int timeCheck()
-{
-    time_t now = time(0);
-
-    char *dt = ctime(&now);
-    std::cout << "Current time :" << dt << std::endl;
-    return now;
-}
+#include "log.h"
 
 T_client::T_client(std::string str)
 {
 
     // init server address.
     client_name = str;
-    std::cout << "Creating client: " << client_name << std::endl;
+    log(SUC).out({"Creating client: ",client_name});
 
     server_addr.sin_family = PF_INET;
     server_addr.sin_port = htons(SERVER_PORT);
@@ -23,7 +15,7 @@ T_client::T_client(std::string str)
     client_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (client_fd < 0)
     {
-        perror("client_fd error");
+        log(ERR).out({"Creating failed: "});
         exit(-1);
     }
 
@@ -35,7 +27,7 @@ bool T_client::T_connect()
 
     if (connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
-        perror("Connect error");
+        log(ERR).out({"Connect failed: "});
         exit(-1);
     }
 }
@@ -44,15 +36,14 @@ bool T_client::T_close()
 {
 
     close(client_fd);
-    std::cout << "Your link end." << std::endl;
+    log(SUC).out({"Link ended. "});
 }
 
 bool T_client::T_start()
 {
 
-    // 连接服务器
     T_connect();
-    std::cout << "Connnect Success." << std::endl;
+    log(SUC).out({"Connected."});
     while (1)
     {
         std::cout << "input command please. [u] for upload,[d] for download,[b] for browse files, [q] for terminate." << std::endl;
@@ -76,6 +67,7 @@ bool T_client::T_start()
             browse_file();
             break;
         case 'q':
+            farewell();
             T_close();
             exit(0);
         default:
@@ -83,19 +75,29 @@ bool T_client::T_start()
         }
     }
 }
-
+bool T_client::farewell()
+{
+    //todo : Add hash value.
+    std::string bye_info = "";
+    if (send(client_fd, bye_info.c_str(), bye_info.length(), 0) < 0)
+    {
+        log(ERR).out({"Diconnection info send Failed. "});
+        return false;
+    }
+    return true;
+}
 bool T_client::validCheck(std::string query)
 {
     char cmd_buf[CMD_SIZE];
     int length = -1;
     if (send(client_fd, query.c_str(), query.length(), 0) < 0)
     {
-        printf("Command [%c] send Failed.\n", query[0]);
+        log(ERR).out({"Command ",std::to_string(query[0]),"send Failed."});
         return false;
     }
     if ((length = recv(client_fd, cmd_buf, CMD_SIZE, 0)) != 1 || cmd_buf[0] != 'Y')
     {
-        printf("Server send back command on [%c] error.\n", query[0]);
+        log(ERR).out({"Server feedback on ",std::to_string(query[0]),"send Failed."});
         return false;
     }
     return true;
@@ -115,33 +117,32 @@ bool T_client ::upload_file(std::string fileName)
 
     if ((fd = fopen(fileName.c_str(), "r")) == NULL)
     {
-        printf("File open error.\n");
+        log(ERR).out({fileName," open failed. "});
         back_del(fileName);
         return false;
     }
-    int startTime = timeCheck();
+    
     bzero(send_buf, sizeof(send_buf));
     while (!feof(fd))
     {
         int len = fread(send_buf, sizeof(char), sizeof(send_buf), fd);
         if (len != write(client_fd, send_buf, len))
         {
-            printf("write error.\n");
+            log(ERR).out({"Write failed. "});
             suc = false;
             break;
         }
     }
-    int endTime = timeCheck();
-    std::cout << "passed by " << endTime - startTime << std::endl;
 
     fclose(fd);
-    printf("File:%s Transfer Successful!\n", fileName.c_str());
+    log(SUC).out({"Trans suc.: "});
+
     return suc;
 }
 
 bool T_client ::download_file(std::string fileName)
 {
-    std::cout << "fileName = " << fileName << std::endl;
+    // std::cout << "fileName = " << fileName << std::endl;
     std::string fullPath = "/Users/ppp/tom/client/";
     fullPath += fileName;
     int length = -1;
@@ -156,11 +157,10 @@ bool T_client ::download_file(std::string fileName)
     FILE *fd;
     if ((fd = fopen(fullPath.c_str(), "w")) == NULL)
     {
-        printf("File open error.\n");
+        log(ERR).out({fileName," open failed. "});
         return false;
     }
 
-    int startTime = timeCheck();
 
     bzero(recv_buf, sizeof(recv_buf));
     while (length = recv(client_fd, recv_buf, BUF_SIZE, 0))
@@ -168,28 +168,27 @@ bool T_client ::download_file(std::string fileName)
         if (length == -1 && errno == EAGAIN)
         {
             printf("timeout.\n");
+            log(WARN).out({"Timeout. "});
             break;
         }
         int write_length = fwrite(recv_buf, sizeof(char), length, fd);
         if (write_length < length)
         {
-            printf("error at write.\n");
+            log(ERR).out({"Write failed. "});
             suc = false;
             break;
         }
         bzero(recv_buf, sizeof(recv_buf));
     }
-    int endTime = timeCheck();
-    std::cout << "passed by " << endTime - startTime << std::endl;
 
     fclose(fd);
-    printf("receive file %s success.\n", fullPath.c_str());
+    // printf("receive file %s success.\n", fullPath.c_str());
     return suc;
 }
 
 bool T_client ::browse_file()
 {
-    std::cout << "Browse file on cloud." << std::endl;
+    // std::cout << "Browse file on cloud." << std::endl;
 
     int length;
     std::string query = "B";
@@ -202,14 +201,14 @@ bool T_client ::browse_file()
     {
         if (length == -1 && errno == EAGAIN)
         {
-            printf("timeout.\n");
+            log(WARN).out({"Time out. "});
             break;
         }
         recv_buf[length] = '\0';
         printf("%s\n", recv_buf);
         bzero(recv_buf, sizeof(recv_buf));
     }
-    std::cout << "File browse end." << std::endl;
+    // std::cout << "File browse end." << std::endl;
     return true;
 }
 bool T_client::back_del(std::string fileName)
