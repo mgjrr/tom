@@ -1,11 +1,10 @@
 #include <iostream>
 
 #include "T_server.h"
+#include "log.h"
 
 
-using namespace std;
-
-const string fileDes = "fileDes.txt";
+const std::string fileDes = "fileDes.txt";
 int epoll_fd, listen_fd;
 std::set<int> connections;
 struct timeval timeout_t = {7, 0};
@@ -13,18 +12,17 @@ struct timeval timeout_t = {7, 0};
 void handle(task_info ti)
 {
 
-    std::thread::id id = std::this_thread::get_id();
-    std::cout << "In the new thread, id : " << id << std::endl;
+    // log(SUC).out({"Handle in the thread, id : ",std::to_string((int)std::this_thread::get_id())});
 
     //todo : valid check in server,not just say yes.
 
     if (send(ti.client_fd, "Y", 1, 0) < 0)
     {
-        printf("Server admit [%s] send Failed./n", "yes");
+        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"Server admit on yes send Failed."});        
         return;
     }
 
-    cout << "Your cmd is " << ti.cmd << endl;
+    std::cout << "Your cmd is " << ti.cmd << std::endl;
     switch (ti.cmd)
     {
     case 'U':
@@ -35,7 +33,7 @@ void handle(task_info ti)
         break;
     case 'B':
         describeFileOutput();
-        cout << "fileDes = " << fileDes << endl;
+        std::cout << "fileDes = " << fileDes << std::endl;
         send_file(ti.client_fd, fileDes);
         break;
     default:
@@ -48,23 +46,23 @@ void handle(task_info ti)
     ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
     epoll_ctl(epoll_fd, EPOLL_CTL_MOD, ti.client_fd, &ev);
 
-    cout << "handle success" << endl;
+    log(SUC).out({"handle success"});
     return;
 }
-bool recv_file(int client_fd, string fileName)
+bool recv_file(int client_fd, std::string fileName)
 {
     bool suc = true;
 
     char recv_buf[BUF_SIZE];
-    cout << "fileName = " << fileName << endl;
-    string fullPath = "/root/depository/";
+    std::cout << "fileName = " << fileName << std::endl;
+    std::string fullPath = "/root/depository/";
     fullPath += fileName;
-    cout << "fullPath  = " << fullPath << endl;
+    std::cout << "fullPath  = " << fullPath << std::endl;
 
     FILE *fd;
     if ((fd = fopen(fullPath.c_str(), "w")) == NULL)
     {
-        printf("File open error.\n");
+        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"File open error."});
         suc = false;
         return suc;
     }
@@ -73,17 +71,16 @@ bool recv_file(int client_fd, string fileName)
     int length = 0;
     while (length = recv(client_fd, recv_buf, BUF_SIZE, 0))
     {
-        //cout << length << endl;
         if (length == -1 && errno == EAGAIN)
         {
-            printf("timeout\n");
+            log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"Time out"});
             break;
         }
 
         int write_length = fwrite(recv_buf, sizeof(char), length, fd);
         if (write_length < length)
         {
-            printf("error at write.\n");
+            log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),fullPath," file write error."});
             suc = false;
             break;
         }
@@ -91,24 +88,24 @@ bool recv_file(int client_fd, string fileName)
     }
 
     fclose(fd);
-    printf("receive file %s success.\n", fullPath.c_str());
+    log(SUC).out({fullPath," file receive success."});
     return suc;
 }
 
-bool send_file(int client_fd, string fileName)
+bool send_file(int client_fd, std::string fileName)
 {
     char send_buf[BUF_SIZE];
     bool suc = true;
 
-    cout << "fileName = " << fileName << endl;
-    string fullPath = "/root/depository/";
+    std::cout << "fileName = " << fileName << std::endl;
+    std::string fullPath = "/root/depository/";
     fullPath += fileName;
-    cout << "fullPath  = " << fullPath << endl;
+    std::cout << "fullPath  = " << fullPath << std::endl;
 
     FILE *fd;
     if ((fd = fopen(fullPath.c_str(), "r")) == NULL)
     {
-        printf("File open error.\n");
+        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"File open error."});
         return false;
     }
 
@@ -119,19 +116,21 @@ bool send_file(int client_fd, string fileName)
         if (len != write(client_fd, send_buf, len))
         {
             printf("write error.\n");
+            log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),fullPath," file send error."});
             suc = false;
             break;
         }
     }
 
     fclose(fd);
-    printf("send file %s success.\n", fullPath.c_str());
+    log(SUC).out({fullPath," file send success."});
     return suc;
 }
 
 bool describeFileOutput()
 {
-    cout << "at least here" << endl;
+    // std::cout << "at least here" << std::endl;
+    log(SUC).out({"ls commmamd executed."});
     system("ls -l > /root/depository/fileDes.txt");
     return true;
 }
@@ -140,7 +139,7 @@ bool T_server ::dealCommand(char cmd)
 {
     if (cmd >= 'A' && cmd <= 'Z')
         cmd = cmd - 'A' + 'a';
-    cout << "Your command is " << cmd << endl;
+    std::cout << "Your command is " << cmd << std::endl;
     if (cmd >= 'a' && cmd <= 'z')
     {
         if (cmd == 'b')
@@ -157,7 +156,7 @@ bool T_server ::dealCommand(char cmd)
     }
     else
     {
-        cout << "Please input valid command" << endl;
+        std::cout << "Please input valid command" << std::endl;
     }
     return true;
 }
@@ -173,12 +172,12 @@ T_server::T_server()
     listen_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0)
     {
-        perror("listen_fd");
+        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"listen socket create failed"});
         exit(-1);
     }
     if (bind(listen_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
-        printf("bind socket error: %s(errno: %d)\n", strerror(errno), errno);
+        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"socket bind error",strerror(errno),std::to_string(errno)});
         exit(-1);
     }
 
@@ -195,17 +194,15 @@ T_server::T_server()
     ev.events = EPOLLIN;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDIN_FILENO, &ev);
 
-    cout << "epoll create success" << endl;
-
+    log(SUC).out({"epoll create success"});
     int ret = listen(listen_fd, 317);
     if (ret < 0)
     {
-        perror("listen error");
+        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"listen failed"});
         exit(-1);
     }
 
-    cout << "Start to listen: " << SERVER_IP << endl;
-    cout << "inital ok" << endl;
+    log(SUC).out({"Start to listen: ","inital ok"});
 }
 
 bool T_server::T_close()
@@ -214,10 +211,10 @@ bool T_server::T_close()
     close(epoll_fd);
     for (auto i : connections)
     {
-        cout << "Have deleted " << i << endl;
+        // std::cout << "Have deleted " << i << std::endl;
         close(i);
     }
-    cout << "server end." << endl;
+    log(SUC).out({"server end."});
 
     return true;
 }
@@ -248,12 +245,12 @@ bool T_server::T_start(thread_pool & tp)
                 epoll_ctl(epoll_fd, EPOLL_CTL_ADD, connect_fd, &ev);
                 setsockopt(connect_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_t, sizeof(timeout_t));
 
-                cout << "A new connection founded,it's id : " << connect_fd << endl;
+                log(SUC).out({"A new connection founded,it's id : ",std::to_string(connect_fd)});
             }
             //from stdin.
             else if (events[i].data.fd == STDIN_FILENO)
             {
-                cout << "Command received.\n";
+                std::cout << "Command received." << std::endl;
                 char command_buf[BUF_SIZE];
                 read(STDIN_FILENO, command_buf, sizeof(command_buf));
                 dealCommand(command_buf[0]);
@@ -263,14 +260,14 @@ bool T_server::T_start(thread_pool & tp)
             {
                 char cmd_buf[CMD_SIZE];
                 int length = -1, tmp_fd = events[i].data.fd;
-                string fileName;
+                std::string fileName;
 
-                cout << "A new event from connection founded.  ";
-                printf("Client's IP is %s:%d\n", inet_ntoa(sa.sin_addr), ntohs(sa.sin_port));
+                log(SUC).out({"A new event from connection founded. Client's IP is",inet_ntoa(sa.sin_addr),std::to_string(ntohs(sa.sin_port))});
 
                 if ((length = recv(tmp_fd, cmd_buf, CMD_SIZE, 0)) < 1)
                 {
-                    printf("Client have quit.\n");
+
+                    log(WARN).out({"Client have quit."});
                     connections.erase(tmp_fd);
                     close(tmp_fd);
                     continue;
@@ -287,7 +284,7 @@ bool T_server::T_start(thread_pool & tp)
                 tp.add_task(handle,tmp_ti);
                 // thread fresh_t(handle, tmp_fd, cmd_buf[0], fileName);
 
-                printf("New task added.\n");
+                // printf("New task added.\n");
 
                 // without this detach(),thread will dump,because the new thread here is a local variable, when leaving else segment,it will be release.
                 // join will wait for it.
