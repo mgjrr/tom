@@ -3,11 +3,101 @@
 #include "T_server.h"
 #include "log.h"
 
-
+// todo.
 const std::string fileDes = "fileDes.txt";
 int epoll_fd, listen_fd;
 std::set<int> connections;
 struct timeval timeout_t = {7, 0};
+HiredisHelper redis;
+
+void splitWithStrtok(const char* str, const char* delim, std::vector<std::string>& ret)
+{
+    char* strcopy = new char[strlen(str) + 1];
+    strcpy(strcopy, str);
+    char *word = strtok(strcopy, delim);
+    ret.push_back(word);
+    while (word = strtok(nullptr, delim))
+        ret.push_back(word);
+    delete[] strcopy;
+}
+
+
+// server.
+bool T_server::user_check(const std::string & usn,const std::string & pwd)
+{
+    //todo.
+    return redis_check_user(redis,{usn,pwd});
+}
+
+bool T_server::file_acc_check(int client_fd,const std::string & file_name)
+{
+    //todo.
+    return true;
+}
+bool T_server::file_browse_check(int client_fd)
+{
+    //todo.
+    return true;
+}
+
+bool T_server::valid_check(int client_fd,std::string &file_name)
+{
+    std::cout<<"begin check "<<client_fd<<std::endl;
+    int length = 0;
+    char cmd_buf[BUF_SIZE];
+    // sleep(10); test for nianbao problem?
+    if ((length = recv(client_fd, cmd_buf, CMD_SIZE, 0)) < 1)
+    {
+        log(WARN).out({"Client have quit."});
+        connections.erase(client_fd);
+        close(client_fd);
+        return false;
+    }
+    char cmd = cmd_buf[0];
+    cmd_buf[length] = '\0';
+    std::cout<<"full cmd = "<<cmd_buf<<std::endl;
+    std::vector<std::string > vec;
+    splitWithStrtok(cmd_buf," ",vec);
+    bool can = true;
+
+    file_name = vec[1];
+
+    file_name += vec[0];
+
+    switch (cmd)
+    {
+    case 'L':
+        can = user_check(vec[1],vec[2]);
+        break;
+    case 'U':
+        can = file_acc_check(client_fd,vec[1]);
+    case 'D':
+        can = file_acc_check(client_fd,vec[1]);
+    case 'B':
+        can = file_browse_check(client_fd);
+    default:
+        break;
+    }
+    if(can)
+    {
+        if (send(client_fd, "Y", 1, 0) < 0)
+        {
+            log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), "Server admit on YES send Failed."});
+            return can;
+        }
+        log(SUC).out({"check success."});
+    }
+    else
+    {
+        if (send(client_fd, "N", 1, 0) < 0)
+        {
+            log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), "Server admit on NO send Failed."});
+            return can;
+        }
+        log(WARN).out({"check failed."});
+    }
+    return can;
+}
 
 void handle(task_info ti)
 {
@@ -16,11 +106,7 @@ void handle(task_info ti)
 
     //todo : valid check in server,not just say yes.
 
-    if (send(ti.client_fd, "Y", 1, 0) < 0)
-    {
-        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"Server admit on yes send Failed."});        
-        return;
-    }
+    
 
     std::cout << "Your cmd is " << ti.cmd << std::endl;
     switch (ti.cmd)
@@ -62,7 +148,7 @@ bool recv_file(int client_fd, std::string fileName)
     FILE *fd;
     if ((fd = fopen(fullPath.c_str(), "w")) == NULL)
     {
-        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"File open error."});
+        log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), "File open error."});
         suc = false;
         return suc;
     }
@@ -73,14 +159,14 @@ bool recv_file(int client_fd, std::string fileName)
     {
         if (length == -1 && errno == EAGAIN)
         {
-            log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"Time out"});
+            log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), "Time out"});
             break;
         }
 
         int write_length = fwrite(recv_buf, sizeof(char), length, fd);
         if (write_length < length)
         {
-            log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),fullPath," file write error."});
+            log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), fullPath, " file write error."});
             suc = false;
             break;
         }
@@ -88,7 +174,7 @@ bool recv_file(int client_fd, std::string fileName)
     }
 
     fclose(fd);
-    log(SUC).out({fullPath," file receive success."});
+    log(SUC).out({fullPath, " file receive success."});
     return suc;
 }
 
@@ -105,7 +191,7 @@ bool send_file(int client_fd, std::string fileName)
     FILE *fd;
     if ((fd = fopen(fullPath.c_str(), "r")) == NULL)
     {
-        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"File open error."});
+        log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), "File open error."});
         return false;
     }
 
@@ -116,14 +202,14 @@ bool send_file(int client_fd, std::string fileName)
         if (len != write(client_fd, send_buf, len))
         {
             printf("write error.\n");
-            log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),fullPath," file send error."});
+            log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), fullPath, " file send error."});
             suc = false;
             break;
         }
     }
 
     fclose(fd);
-    log(SUC).out({fullPath," file send success."});
+    log(SUC).out({fullPath, " file send success."});
     return suc;
 }
 
@@ -172,12 +258,12 @@ T_server::T_server()
     listen_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0)
     {
-        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"listen socket create failed"});
+        log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), "listen socket create failed"});
         exit(-1);
     }
     if (bind(listen_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
-        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"socket bind error",strerror(errno),std::to_string(errno)});
+        log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), "socket bind error", strerror(errno), std::to_string(errno)});
         exit(-1);
     }
 
@@ -198,11 +284,11 @@ T_server::T_server()
     int ret = listen(listen_fd, 317);
     if (ret < 0)
     {
-        log(ERR).out({std::string(__FILE__),std::string(__FUNCTION__),"listen failed"});
+        log(ERR).out({std::string(__FILE__), std::string(__FUNCTION__), "listen failed"});
         exit(-1);
     }
 
-    log(SUC).out({"Start to listen: ","inital ok"});
+    log(SUC).out({"Start to listen: ", "inital ok"});
 }
 
 bool T_server::T_close()
@@ -219,13 +305,14 @@ bool T_server::T_close()
     return true;
 }
 
-bool T_server::T_start(thread_pool & tp)
+bool T_server::T_start(thread_pool &tp)
 {
+    std::string dontk = "dap1999";
+    redis.Init("127.0.0.1",6379,dontk);
     struct epoll_event ev, events[MAX_EVENT];
     while (1)
     {
         int trigger_num = epoll_wait(epoll_fd, events, MAX_EVENT, 500);
-        // vector<thread> vec_thd;
         for (int i = 0; i < trigger_num; i++)
         {
             // check
@@ -238,14 +325,26 @@ bool T_server::T_start(thread_pool & tp)
                 // to do.
                 socklen_t addr_len = sizeof(listen_fd);
 
-                int connect_fd = accept(listen_fd, NULL, &addr_len);
+                int connect_fd = accept(listen_fd, NULL, &addr_len),tms = 0;
+                std::string gjr = "";
+                while(!valid_check(connect_fd,gjr))
+                {
+                    std::cout<<"log failed"<<std::endl;
+                    tms++;
+                    if(tms>=MAX_LOG_CHECK)
+                    {
+                        tms = PRES_CHECK_VAL;
+                        break;
+                    }
+                }
+                if(tms==PRES_CHECK_VAL) continue;
                 connections.insert(connect_fd);
                 ev.data.fd = connect_fd;
                 ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
                 epoll_ctl(epoll_fd, EPOLL_CTL_ADD, connect_fd, &ev);
                 setsockopt(connect_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_t, sizeof(timeout_t));
 
-                log(SUC).out({"A new connection founded,it's id : ",std::to_string(connect_fd)});
+                log(SUC).out({"A new connection founded,it's id : ", std::to_string(connect_fd)});
             }
             //from stdin.
             else if (events[i].data.fd == STDIN_FILENO)
@@ -258,37 +357,18 @@ bool T_server::T_start(thread_pool & tp)
             //read from a existed connection
             else
             {
-                char cmd_buf[CMD_SIZE];
+                char cmd;
                 int length = -1, tmp_fd = events[i].data.fd;
                 std::string fileName;
 
-                log(SUC).out({"A new event from connection founded. Client's IP is",inet_ntoa(sa.sin_addr),std::to_string(ntohs(sa.sin_port))});
-
-                if ((length = recv(tmp_fd, cmd_buf, CMD_SIZE, 0)) < 1)
-                {
-
-                    log(WARN).out({"Client have quit."});
-                    connections.erase(tmp_fd);
-                    close(tmp_fd);
+                log(SUC).out({"A new event from connection founded. Client's IP is", inet_ntoa(sa.sin_addr), std::to_string(ntohs(sa.sin_port))});
+                if (!valid_check(tmp_fd,fileName))
                     continue;
-                }
-                for (int i = length - 1; i > -1; --i)
-                    if (cmd_buf[i] == '/' || i == 0)
-                    {
-                        for (int j = i + 1; j < length; ++j)
-                            fileName.push_back(cmd_buf[j]);
-                        break;
-                    }
-                int tick=(int)(std::clock()*1000/ CLOCKS_PER_SEC);
-                task_info tmp_ti(cmd_buf[0],tmp_fd,tick,fileName,NORMAL_PRI);
-                tp.add_task(handle,tmp_ti);
-                // thread fresh_t(handle, tmp_fd, cmd_buf[0], fileName);
-
-                // printf("New task added.\n");
-
-                // without this detach(),thread will dump,because the new thread here is a local variable, when leaving else segment,it will be release.
-                // join will wait for it.
-                // fresh_t.detach();
+                cmd = fileName.back();
+                fileName.pop_back();
+                int tick = (int)(std::clock() * 1000 / CLOCKS_PER_SEC);
+                task_info tmp_ti(cmd, tmp_fd, tick, fileName, NORMAL_PRI);
+                tp.add_task(handle, tmp_ti);
             }
         }
     }

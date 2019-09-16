@@ -1,6 +1,12 @@
 #include "T_client.h"
 #include "log.h"
 
+std::string SplitFilename (const std::string& str)
+{
+  std::size_t found = str.find_last_of("/");
+  return str.substr(found+1);
+}
+
 T_client::T_client(std::string str)
 {
 
@@ -24,7 +30,7 @@ T_client::T_client(std::string str)
 
 bool T_client::T_connect()
 {
-
+    
     if (connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
         log(ERR).out({"Connect failed: "});
@@ -38,11 +44,37 @@ bool T_client::T_close()
     close(client_fd);
     log(SUC).out({"Link ended. "});
 }
-
+bool T_client::login_check()
+{
+    std::string user_name,password;
+    std::cout<<"user_name:";
+    std::cin>>user_name;
+    std::cout<<"password:";
+    std::cin>>password;
+    std::string qry = "L ";
+    qry += user_name;
+    qry += " ";
+    //todo: use hash.
+    qry += password;
+    if(valid_check(qry))
+    {
+        std::cout<<"Log success."<<std::endl;
+        return true;
+    }
+    else
+    {
+        std::cout<<"Log failed."<<std::endl;
+        return false;
+    }
+}
 bool T_client::T_start()
 {
 
     T_connect();
+    while(!login_check())
+    {
+
+    }
     log(SUC).out({"Connected."});
     while (1)
     {
@@ -67,7 +99,7 @@ bool T_client::T_start()
             browse_file();
             break;
         case 'q':
-            farewell();
+            // farewell();
             T_close();
             exit(0);
         default:
@@ -86,7 +118,7 @@ bool T_client::farewell()
     }
     return true;
 }
-bool T_client::validCheck(std::string query)
+bool T_client::valid_check(std::string query)
 {
     char cmd_buf[CMD_SIZE];
     int length = -1;
@@ -97,28 +129,29 @@ bool T_client::validCheck(std::string query)
     }
     if ((length = recv(client_fd, cmd_buf, CMD_SIZE, 0)) != 1 || cmd_buf[0] != 'Y')
     {
-        log(ERR).out({"Server feedback on ",std::to_string(query[0]),"send Failed."});
+        log(ERR).out({"Server rejected on ",std::to_string(query[0]),"."});
         return false;
     }
     return true;
 }
 
-bool T_client ::upload_file(std::string fileName)
+bool T_client ::upload_file(const std::string & full_name)
 {
     char send_buf[BUF_SIZE];
     int length = -1;
     FILE *fd;
     bool suc = true;
+    std::string fileName = SplitFilename(full_name);
 
-    std::string query = "U";
+    std::string query = "U ";
     query += fileName;
-    if (!validCheck(query))
+    if (!valid_check(query))
         return false;
 
-    if ((fd = fopen(fileName.c_str(), "r")) == NULL)
+    if ((fd = fopen(full_name.c_str(), "r")) == NULL)
     {
-        log(ERR).out({fileName," open failed. "});
-        back_del(fileName);
+        log(ERR).out({full_name," open failed. "});
+        back_del(full_name);
         return false;
     }
     
@@ -149,9 +182,9 @@ bool T_client ::download_file(std::string fileName)
     char recv_buf[BUF_SIZE];
     bool suc = true;
 
-    std::string query = "D";
+    std::string query = "D ";
     query += fileName;
-    if (!validCheck(query))
+    if (!valid_check(query))
         return false;
 
     FILE *fd;
@@ -160,7 +193,7 @@ bool T_client ::download_file(std::string fileName)
         log(ERR).out({fileName," open failed. "});
         return false;
     }
-
+    
 
     bzero(recv_buf, sizeof(recv_buf));
     while (length = recv(client_fd, recv_buf, BUF_SIZE, 0))
@@ -191,8 +224,8 @@ bool T_client ::browse_file()
     // std::cout << "Browse file on cloud." << std::endl;
 
     int length;
-    std::string query = "B";
-    if (!validCheck(query))
+    std::string query = "B ";
+    if (!valid_check(query))
         return false;
     char recv_buf[BUF_SIZE];
 

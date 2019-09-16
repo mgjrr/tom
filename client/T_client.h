@@ -17,12 +17,13 @@ private:
     struct timeval timeout_t = {7, 0};
     bool T_connect();
     bool T_close();
-    bool upload_file(std::string);
+    bool upload_file(const std::string &);
     bool download_file(std::string);
     bool browse_file();
-    bool validCheck(std::string);
+    bool valid_check(std::string);
     bool farewell();
     bool back_del(std::string);
+    bool login_check();
 };
 
 #endif

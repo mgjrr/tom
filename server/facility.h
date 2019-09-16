@@ -10,6 +10,7 @@
 #include <ctime>
 #include <fstream>
 #include <set>
+#include <map>
 #include <thread>
 #include <vector>
 #include <mutex>
@@ -32,4 +33,7 @@
 
 #define MAX_EVENT 20
 
+#define MAX_LOG_CHECK 2
+
+#define PRES_CHECK_VAL 0x3f3f3f3f
 #endif
